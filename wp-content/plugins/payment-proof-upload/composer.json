@@ -1,0 +1,13 @@
+{
+  "name": "kumbulink/payment-proof-upload",
+  "description": "Plugin para upload seguro de comprovantes via S3.",
+  "type": "project",
+  "require": {
+    "aws/aws-sdk-php": "^3.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Kumbulink\\PaymentProof\\": "src/"
+    }
+  }
+}
