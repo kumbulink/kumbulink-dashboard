@@ -163,7 +163,23 @@ add_filter('rest_pre_dispatch', 'inject_jwt_from_cookie', 10, 3);
 
 function inject_jwt_from_cookie($result, $server, $request) {
 	if (isset($_COOKIE['jwt_token'])) {
-			$request->set_header('Authorization', 'Bearer ' . $_COOKIE['jwt_token']);
+		$token = $_COOKIE['jwt_token'];
+		
+		$request->set_header('Authorization', 'Bearer ' . $token);
+		
+		// Try to decode token manually
+		$token_parts = explode('.', $token);
+		if (count($token_parts) === 3) {
+			$payload = json_decode(base64_decode($token_parts[1]), true);
+			
+			if (isset($payload['data']['user']['id'])) {
+				$user_id = $payload['data']['user']['id'];
+				wp_set_current_user($user_id);
+			}
+		}
+		
+	} else {
+		error_log('No JWT token found in cookie');
 	}
 
 	return $result;
@@ -184,7 +200,7 @@ function set_jwt_cookie_http_only($data, $user) {
             'domain' => $_SERVER['HTTP_HOST'],
             'secure' => true,            // apenas HTTPS
             'httponly' => true,          // inacessível via JS
-            'samesite' => 'Strict'       // previne CSRF cross-site
+            'samesite' => 'Strict'      // previne CSRF cross-site
         ]
     );
     
@@ -203,13 +219,6 @@ function kumbulink_extend_jwt_response($data, $user) {
 
     return $data;
 }
-
-add_filter('jwt_auth_token', function () {
-	if (isset($_COOKIE['jwt_token'])) {
-			return $_COOKIE['jwt_token'];
-	}
-	return null;
-});
 
 /*  --------- END JWT AUTH CONFIG  --------- */
 
@@ -243,19 +252,3 @@ add_action('rest_api_init', function () {
 });
 
 /*  --------- END CORS CONFIG  --------- */
-
-/*  --------- START USER PROFILE CONFIG  --------- */
-add_filter('user_has_cap', function ($allcaps, $cap, $args, $user) {
-	if (
-			isset($cap[0]) &&
-			$cap[0] === 'edit_user' &&
-			isset($args[0], $args[1]) &&
-			$args[0] === $args[1] // usuário editando ele mesmo
-	) {
-			$allcaps['edit_user'] = true;
-	}
-
-	return $allcaps;
-}, 10, 4);
-
-// /*  --------- END USER PROFILE CONFIG  --------- */
