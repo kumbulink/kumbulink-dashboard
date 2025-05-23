@@ -13,10 +13,6 @@ add_action('rest_api_init', function () {
         'permission_callback' => '__return_true',
     ]);
 });
-add_action('show_user_profile', 'kumbulink_extra_user_fields');
-add_action('edit_user_profile', 'kumbulink_extra_user_fields');
-add_action('personal_options_update', 'kumbulink_save_extra_user_fields');
-add_action('edit_user_profile_update', 'kumbulink_save_extra_user_fields');
 
 function kumbulink_create_user_proxy($request) {
     $jwt = getenv('ADMIN_JWT');
@@ -54,90 +50,40 @@ function kumbulink_create_user_proxy($request) {
     $status = wp_remote_retrieve_response_code($response);
     $response_body   = wp_remote_retrieve_body($response);
     $response_data = json_decode($response_body, true);
-    $user_id = $response_data['id'];
+    $user_id = 'user_' . $response_data['id'];
 
     if ($status !== 201 || empty($response_data['id'])) {
         return new WP_Error('user_creation_failed', 'Erro ao criar usuário. Detalhes: ' . $response_body, ['status' => 500]);
     }
 
-    if (!empty($body['birthDate'])) {
-        update_user_meta($user_id, 'birth_date', sanitize_text_field($body['birthDate']));
+   if (!empty($body['birthDate'])) {
+        update_field('birth_date', sanitize_text_field($body['birthDate']), $user_id);
     }
 
     if (!empty($body['documentType'])) {
-        update_user_meta($user_id, 'document_type', sanitize_text_field($body['documentType']));
+        update_field('document_type', sanitize_text_field($body['documentType']), $user_id);
     }
 
     if (!empty($body['documentNumber'])) {
-        update_user_meta($user_id, 'document_id', sanitize_text_field($body['documentNumber']));
+        update_field('document_id', sanitize_text_field($body['documentNumber']), $user_id);
     }
 
     if (!empty($body['country'])) {
-        update_user_meta($user_id, 'country', sanitize_text_field($body['country']));
+        update_field('country', sanitize_text_field($body['country']), $user_id);
     }
 
     if (!empty($body['termsAccepted'])) {
-        update_user_meta($user_id, 'terms_accepted', sanitize_text_field($body['termsAccepted']));
+        update_field('terms_accepted', sanitize_text_field($body['termsAccepted']), $user_id);
     }
 
+    // Add ACF fields to the response
+    $response_data['acf'] = [
+        'birth_date' => get_field('birth_date', $user_id),
+        'document_type' => get_field('document_type', $user_id),
+        'document_id' => get_field('document_id', $user_id),
+        'country' => get_field('country', $user_id),
+        'terms_accepted' => get_field('terms_accepted', $user_id)
+    ];
+
     return new WP_REST_Response($response_data, $status);
-}
-
-function kumbulink_format_date_for_input($date_string) {
-    if (empty($date_string)) return '';
-    $date = new DateTime($date_string);
-    return $date->format('Y-m-d');
-}
-
-function kumbulink_extra_user_fields($user) {
-    ?>
-    <br>
-    <h2><?php _e('Additional Information', 'kumbulink'); ?></h2>
-    <table class="form-table">
-        <tr>
-            <th><label for="birth_date"><?php _e('Birth Date', 'kumbulink'); ?></label></th>
-            <td>
-                <input type="date" name="birth_date" id="birth_date" value="<?php echo esc_attr(kumbulink_format_date_for_input(get_user_meta($user->ID, 'birth_date', true))); ?>" class="regular-text" />
-            </td>
-        </tr>
-        <tr>
-            <th><label for="document_type"><?php _e('Document Type', 'kumbulink'); ?></label></th>
-            <td>
-                <input type="text" name="document_type" id="document_type" value="<?php echo esc_attr(get_user_meta($user->ID, 'document_type', true)); ?>" class="regular-text" />
-            </td>
-        </tr>
-        <tr>
-            <th><label for="document_id"><?php _e('Document ID', 'kumbulink'); ?></label></th>
-            <td>
-                <input type="text" name="document_id" id="document_id" value="<?php echo esc_attr(get_user_meta($user->ID, 'document_id', true)); ?>" class="regular-text" />
-            </td>
-        </tr>
-        <tr>
-            <th><label for="country"><?php _e('Country', 'kumbulink'); ?></label></th>
-            <td>
-                <input type="text" name="country" id="country" value="<?php echo esc_attr(get_user_meta($user->ID, 'country', true)); ?>" class="regular-text" />
-            </td>
-        </tr>
-        <tr>
-            <th><label for="terms_accepted"><?php _e('Accepted Terms', 'kumbulink'); ?></label></th>
-            <td>
-                <input type="checkbox" name="terms_accepted" id="terms_accepted" value="1" <?php checked(get_user_meta($user->ID, 'terms_accepted', true), '1'); ?> />
-                <label for="terms_accepted"><?php _e('Yes', 'kumbulink'); ?></label>
-            </td>
-        </tr>
-    </table>
-    <?php
-}
-
-function kumbulink_save_extra_user_fields($user_id) {
-    if (!current_user_can('edit_user', $user_id)) return;
-
-    // Convert the date to ISO 8601 format
-    $birth_date = !empty($_POST['birth_date']) ? date('Y-m-d\TH:i:s.000\Z', strtotime($_POST['birth_date'])) : '';
-    update_user_meta($user_id, 'birth_date', sanitize_text_field($birth_date));
-    
-    update_user_meta($user_id, 'document_type', sanitize_text_field($_POST['document_type']));
-    update_user_meta($user_id, 'document_id', sanitize_text_field($_POST['document_id']));
-    update_user_meta($user_id, 'country', sanitize_text_field($_POST['country']));
-    update_user_meta($user_id, 'terms_accepted', isset($_POST['terms_accepted']) ? '1' : '0');
 }

@@ -224,8 +224,8 @@ function kumbulink_extend_jwt_response($data, $user) {
 		$user_id = $user->ID;
 		
 		$data['id'] = $user_id;
-		$data['document_id']   = get_user_meta($user_id, 'document_id', true);
-    $data['document_type'] = get_user_meta($user_id, 'document_type', true);
+		$data['document_id']   = get_field('document_id', 'user_' . $user_id);
+    $data['document_type'] = get_field('document_type', 'user_' . $user_id);
 
     return $data;
 }
@@ -240,6 +240,8 @@ add_action('rest_api_init', function () {
 		$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 		$allowed_origins = [
 			'http://localhost:5173',
+			'https://local.kumbulink.com:5173',
+			'https://localhost:5173',
 			'http://127.0.0.1:5173',
 			'https://kumbulink.com',
 			'https://www.kumbulink.com'
