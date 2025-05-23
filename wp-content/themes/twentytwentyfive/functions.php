@@ -191,21 +191,31 @@ add_filter('jwt_auth_token_before_dispatch', 'kumbulink_extend_jwt_response', 10
 function set_jwt_cookie_http_only($data, $user) {
     $token = $data['token'];
     
+    // If admin, cookie will last for 10 years
+    $expiration = user_can($user->ID, 'administrator') 
+        ? time() + (10 * 365 * 24 * 60 * 60)  // 10 years
+        : time() + 3600;                       // 1 hour for normal users
+    
     setcookie(
         'jwt_token',
         $token,
         [
-            'expires' => time() + 3600, // 1 hora
+            'expires' => $expiration,
             'path' => '/',
             'domain' => $_SERVER['HTTP_HOST'],
-            'secure' => true,            // apenas HTTPS
-            'httponly' => true,          // inacessível via JS
-            'samesite' => 'Strict'      // previne CSRF cross-site
+            'secure' => true,            // only HTTPS
+            'httponly' => true,          // inacessible via JS
+            'samesite' => 'Strict'      // prevent CSRF cross-site
         ]
     );
     
-    // remove o token da resposta JSON
-    unset($data['token']);
+    // If admin, keep the token in the response
+    if (user_can($user->ID, 'administrator')) {
+        $data['token'] = $token;
+    } else {
+        // If not admin, remove the token from the response
+        unset($data['token']);
+    }
     
     return $data;
 }
