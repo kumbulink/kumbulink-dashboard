@@ -15,11 +15,6 @@ add_action('rest_api_init', function () {
 });
 
 function kumbulink_create_user_proxy($request) {
-    $jwt = getenv('ADMIN_JWT');
-    if (!$jwt) {
-        return new WP_Error('no_jwt', 'JWT de admin não configurado.', ['status' => 500]);
-    }
-
     $body = $request->get_json_params();
 
     $required_fields = ['username', 'email', 'password'];
@@ -29,61 +24,54 @@ function kumbulink_create_user_proxy($request) {
         }
     }
 
-    $response = wp_remote_post('https://api.kumbulink.com/wp-json/wp/v2/users', [
-        'headers' => [
-            'Authorization' => 'Bearer ' . $jwt,
-            'Content-Type'  => 'application/json',
-        ],
-        'body' => json_encode([
-            'username' => $body['username'],
-            'email'    => $body['email'],
-            'password' => $body['password'],
-            'name'     => $body['name'] ?? '',
-            'roles'    => ['author']
-        ]),
+    if (username_exists($body['username']) || email_exists($body['email'])) {
+        return new WP_Error('user_exists', 'Usuário ou e-mail já cadastrado.', ['status' => 409]);
+    }
+
+    $user_id = wp_insert_user([
+        'user_login' => sanitize_user($body['username']),
+        'user_pass'  => $body['password'],
+        'user_email' => sanitize_email($body['email']),
+        'display_name' => $body['name'] ?? '',
+        'role' => 'author'
     ]);
 
-    if (is_wp_error($response)) {
-        return new WP_Error('request_failed', 'Erro ao criar usuário.', ['status' => 500]);
+    if (is_wp_error($user_id)) {
+        return new WP_Error('user_creation_failed', 'Erro ao criar usuário: ' . $user_id->get_error_message(), ['status' => 500]);
     }
 
-    $status = wp_remote_retrieve_response_code($response);
-    $response_body   = wp_remote_retrieve_body($response);
-    $response_data = json_decode($response_body, true);
-    $user_id = 'user_' . $response_data['id'];
-
-    if ($status !== 201 || empty($response_data['id'])) {
-        return new WP_Error('user_creation_failed', 'Erro ao criar usuário. Detalhes: ' . $response_body, ['status' => 500]);
-    }
-
-   if (!empty($body['birthDate'])) {
-        update_field('birth_date', sanitize_text_field($body['birthDate']), $user_id);
+    // Campos ACF (opcional)
+    if (!empty($body['birthDate'])) {
+        update_field('birth_date', sanitize_text_field($body['birthDate']), 'user_' . $user_id);
     }
 
     if (!empty($body['documentType'])) {
-        update_field('document_type', sanitize_text_field($body['documentType']), $user_id);
+        update_field('document_type', sanitize_text_field($body['documentType']), 'user_' . $user_id);
     }
 
     if (!empty($body['documentNumber'])) {
-        update_field('document_id', sanitize_text_field($body['documentNumber']), $user_id);
+        update_field('document_id', sanitize_text_field($body['documentNumber']), 'user_' . $user_id);
     }
 
     if (!empty($body['country'])) {
-        update_field('country', sanitize_text_field($body['country']), $user_id);
+        update_field('country', sanitize_text_field($body['country']), 'user_' . $user_id);
     }
 
     if (!empty($body['termsAccepted'])) {
-        update_field('terms_accepted', sanitize_text_field($body['termsAccepted']), $user_id);
+        update_field('terms_accepted', sanitize_text_field($body['termsAccepted']), 'user_' . $user_id);
     }
 
-    // Add ACF fields to the response
-    $response_data['acf'] = [
-        'birth_date' => get_field('birth_date', $user_id),
-        'document_type' => get_field('document_type', $user_id),
-        'document_id' => get_field('document_id', $user_id),
-        'country' => get_field('country', $user_id),
-        'terms_accepted' => get_field('terms_accepted', $user_id)
-    ];
-
-    return new WP_REST_Response($response_data, $status);
+    return new WP_REST_Response([
+        'id'   => $user_id,
+        'username' => $body['username'],
+        'email'    => $body['email'],
+        'acf' => [
+            'birth_date' => get_field('birth_date', 'user_' . $user_id),
+            'document_type' => get_field('document_type', 'user_' . $user_id),
+            'document_id' => get_field('document_id', 'user_' . $user_id),
+            'country' => get_field('country', 'user_' . $user_id),
+            'terms_accepted' => get_field('terms_accepted', 'user_' . $user_id)
+        ]
+    ], 201);
 }
+

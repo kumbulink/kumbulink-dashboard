@@ -174,7 +174,10 @@ function inject_jwt_from_cookie($result, $server, $request) {
 			
 			if (isset($payload['data']['user']['id'])) {
 				$user_id = $payload['data']['user']['id'];
-				wp_set_current_user($user_id);
+				if (get_userdata($user_id)) {
+					wp_set_current_user($user_id);
+					wp_set_auth_cookie($user_id); 
+				}
 			}
 		}
 		
