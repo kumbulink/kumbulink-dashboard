@@ -267,3 +267,152 @@ add_action('rest_api_init', function () {
 });
 
 /*  --------- END CORS CONFIG  --------- */
+
+add_action('rest_api_init', function () {
+	register_rest_route('custom/v1', '/logout', [
+			'methods' => 'POST',
+			'callback' => function () {
+				$params = session_get_cookie_params();
+					setcookie('jwt_token', '', time() - 3600, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+
+					return new WP_REST_Response(['message' => 'Logout successful'], 200);
+			},
+			'permission_callback' => '__return_true',
+	]);
+});
+
+// Adiciona o filtro por autor no admin dos Anúncios
+// add_action('restrict_manage_posts', function () {
+// 	global $typenow;
+
+// 	$post_types = ['classifieds', 'match'];
+	
+// 	if (!in_array($typenow, $post_types)) return;
+
+// 	$authors = get_users(['who' => 'authors']);
+
+// 	$status_options = [
+// 			'pending' => 'Pending',
+// 			'confirmed' => 'Confirmed',
+// 			'paid' => 'Paid'
+// 	];
+
+// 	$selected = $_GET['custom_status'] ?? '';
+	
+// 	echo '<select name="author" id="author" class="postform">';
+// 	echo '<option value="">Todos os autores</option>';
+	
+// 	foreach ($authors as $author) {
+// 			printf(
+// 					'<option value="%s"%s>%s</option>',
+// 					esc_attr($author->ID),
+// 					(isset($_GET['author']) && $_GET['author'] == $author->ID) ? ' selected="selected"' : '',
+// 					esc_html($author->display_name)
+// 			);
+// 	}
+	
+// 	echo '</select>';
+
+// 	echo '<select name="custom_status">';
+//     echo '<option value="">Todos os Status</option>';
+
+//     foreach ($status_options as $key => $label) {
+//         printf(
+//             '<option value="%s"%s>%s</option>',
+//             esc_attr($key),
+//             selected($selected, $key, false),
+//             esc_html($label)
+//         );
+//     }
+
+//     echo '</select>';
+// });
+
+// add_filter('pre_get_posts', function ($query) {
+// 	global $pagenow;
+
+// 	if (!is_admin() || $pagenow !== 'edit.php' || !$query->is_main_query()) {
+// 			return;
+// 	}
+
+// 	$custom_status = $_GET['custom_status'] ?? '';
+
+// 	if ($custom_status) {
+// 			$query->set('meta_query', [
+// 					[
+// 							'key' => 'status', // Nome do campo ACF ou custom field
+// 							'value' => $custom_status,
+// 							'compare' => '='
+// 					]
+// 			]);
+// 	}
+// });
+
+add_action('restrict_manage_posts', function () {
+	global $typenow;
+
+	$post_types = ['classifieds', 'match'];
+
+	if (!in_array($typenow, $post_types)) return;
+
+	$authors = get_users(['who' => 'authors']);
+
+	$status_options = [
+		'created' => __('No Matches'),
+		'matched' => __('Matched'),
+		'pending' => __('Awaiting Payments'),
+		'paid' => __('Paid'),
+		'confirmed' => __('Completed')
+	];
+
+	$selected = $_GET['custom_status'] ?? '';
+
+	// author filter
+	echo '<select name="author" id="author" class="postform">';
+	echo '<option value="">' . esc_html__( 'All authors' ) . '</option>';
+	foreach ($authors as $author) {
+		printf(
+			'<option value="%s"%s>%s</option>',
+			esc_attr($author->ID),
+			(isset($_GET['author']) && $_GET['author'] == $author->ID) ? ' selected="selected"' : '',
+			esc_html($author->display_name)
+		);
+	}
+	echo '</select>';
+
+	// status filter
+	echo '<select name="custom_status">';
+	echo '<option value="">' . esc_html__( 'All statuses' ) . '</option>';
+	foreach ($status_options as $key => $label) {
+		printf(
+			'<option value="%s"%s>%s</option>',
+			esc_attr($key),
+			selected($selected, $key, false),
+			esc_html($label)
+		);
+	}
+	echo '</select>';
+});
+
+// apply the filter in the admin
+add_filter('pre_get_posts', function ($query) {
+	global $pagenow;
+
+	if (!is_admin() || $pagenow !== 'edit.php' || !$query->is_main_query()) {
+		return;
+	}
+
+	$custom_status = $_GET['custom_status'] ?? '';
+
+	if ($custom_status) {
+		$query->set('meta_query', [
+			[
+				'key' => 'status',
+				'value' => $custom_status,
+				'compare' => '='
+			]
+		]);
+	}
+});
+
+
