@@ -132,6 +132,7 @@ add_action('rest_api_init', function () {
 
 /*  --------- START CUSTOM ROUTES  --------- */
 
+# LOGOUT
 add_action('rest_api_init', function () {
 	register_rest_route('custom/v1', '/logout', [
 			'methods' => 'POST',
@@ -145,6 +146,7 @@ add_action('rest_api_init', function () {
 	]);
 });
 
+# MATCHES
 add_action('rest_after_insert_matches', function ($post, $request, $creating) {
 	error_log('🔍 Disparou rest_after_insert_match para post ID: ' . $post->ID);
 	if (!$creating) return;
@@ -167,13 +169,11 @@ add_action('rest_after_insert_matches', function ($post, $request, $creating) {
 }, 10, 3);
 
 
-
-
-
 /*  --------- END CUSTOM ROUTES  --------- */
 
 /*  --------- START CUSTOM FILTERS  --------- */
 
+# CLASSIFIEDS FILTERS
 add_action('restrict_manage_posts', function () {
 	global $typenow;
 
@@ -185,15 +185,13 @@ add_action('restrict_manage_posts', function () {
 
 	$status_options = [
 		'created' => __('No Matches'),
-		'matched' => __('Matched'),
 		'pending' => __('Awaiting Payments'),
-		'paid' => __('Paid'),
-		'confirmed' => __('Completed')
+		'done' => __('Completed')
 	];
 
 	$selected = $_GET['custom_status'] ?? '';
 
-	// author filter
+	# AUTHOR FILTER
 	echo '<select name="author" id="author" class="postform">';
 	echo '<option value="">' . esc_html__( 'All authors' ) . '</option>';
 	foreach ($authors as $author) {
@@ -206,7 +204,7 @@ add_action('restrict_manage_posts', function () {
 	}
 	echo '</select>';
 
-	// status filter
+	# STATUS FILTER
 	echo '<select name="custom_status">';
 	echo '<option value="">' . esc_html__( 'All statuses' ) . '</option>';
 	foreach ($status_options as $key => $label) {
@@ -273,7 +271,7 @@ add_filter('rest_classifieds_query', function ($args, $request) {
 /*  --------- START CUSTOM API RESPONSE  --------- */
 
 // return sellerTo and sellerFrom with bank name
-add_filter('rest_prepare_classifieds', function ($response, $post, $request) {
+function kumbulink_prepare_response($response, $post, $request) {
 	$acf = get_fields($post->ID);
 
 	$sellerToId = get_field('sellerTo', $post->ID, false); 
@@ -292,11 +290,70 @@ add_filter('rest_prepare_classifieds', function ($response, $post, $request) {
 		];
 	}
 
+	$buyerToId = get_field('buyerTo', $post->ID, false); 
+	if ($buyerToId) {
+		$acf['buyerTo'] = [
+			'id'   => $buyerToId,
+			'bank' => get_field('bank', $buyerToId),
+		];
+	}
+
+	$buyerFromId = get_field('buyerFrom', $post->ID, false); 
+	if ($buyerFromId) {
+		$acf['buyerFrom'] = [
+			'id'   => $buyerFromId,
+			'bank' => get_field('bank', $buyerFromId),
+		];
+	}
+
 	$response->data['acf'] = $acf;
 
 	return $response;
-}, 30, 3);
+}
+add_filter('rest_prepare_classifieds', 'kumbulink_prepare_response' , 30, 3);
+add_filter('rest_prepare_matches', 'kumbulink_prepare_response' , 30, 3);
 
+
+add_filter('rest_prepare_matches', function ($response, $post, $request) {
+	$match_id = $post->ID;
+	$related_id = get_field('relatedOffer', $match_id);
+
+	if ($related_id && get_post_type($related_id) === 'classifieds') {
+		$related_fields = get_fields($related_id);
+
+		// Sanitize sellerTo
+		if (!empty($related_fields['sellerTo']) && is_object($related_fields['sellerTo'])) {
+			$sellerToId = $related_fields['sellerTo']->ID ?? null;
+
+			if ($sellerToId) {
+				$related_fields['sellerTo'] = [
+					'id'   => $sellerToId,
+					'bank' => get_field('bank', $sellerToId),
+				];
+			}
+		}
+
+		// Sanitize sellerFrom
+		if (!empty($related_fields['sellerFrom']) && is_object($related_fields['sellerFrom'])) {
+			$sellerFromId = $related_fields['sellerFrom']->ID ?? null;
+
+			if ($sellerFromId) {
+				$related_fields['sellerFrom'] = [
+					'id'   => $sellerFromId,
+					'bank' => get_field('bank', $sellerFromId),
+				];
+			}
+		}
+
+		// Inclui os dados como nested no match
+		$response->data['offer'] = [
+			'id' => $related_id,
+			'fields' => $related_fields
+		];
+	}
+
+	return $response;
+}, 10, 3);
 
 
 
