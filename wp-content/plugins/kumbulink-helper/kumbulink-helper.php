@@ -6,7 +6,7 @@
  * Author: Kumbulink Dev Team
  */
 
-// Redireciona qualquer acesso ao frontend para o admin
+// Redirects any frontend access to the dashboard
 add_action('template_redirect', function () {
 	if (!is_admin()) {
 		wp_redirect(admin_url());
@@ -14,13 +14,15 @@ add_action('template_redirect', function () {
 	}
 });
 
-// Habilita registro via API
+// Enable user registration via API
 add_filter('rest_user_registration_enabled', function () {
 	return true;
 });
 
 
-/*  --------- START JWT AUTH CONFIG  --------- */
+########################################################################
+#########     START JWT AUTH CONFIG   ##################################
+########################################################################
 add_filter('rest_pre_dispatch', 'inject_jwt_from_cookie', 10, 3);
 
 function inject_jwt_from_cookie($result, $server, $request) {
@@ -95,9 +97,10 @@ function kumbulink_extend_jwt_response($data, $user) {
     return $data;
 }
 
-/*  --------- END JWT AUTH CONFIG  --------- */
+########################################################################
+##############   START CORS CONFIG   ###################################
+########################################################################
 
-/*  --------- START CORS CONFIG  --------- */
 add_action('rest_api_init', function () {
 	remove_filter('rest_pre_serve_request', 'rest_send_cors_headers');
 
@@ -128,9 +131,10 @@ add_action('rest_api_init', function () {
 	});
 });
 
-/*  --------- END CORS CONFIG  --------- */
 
-/*  --------- START CUSTOM ROUTES  --------- */
+########################################################################
+##############  START CUSTOM ROUTES  ###################################
+########################################################################
 
 # LOGOUT
 add_action('rest_api_init', function () {
@@ -146,34 +150,65 @@ add_action('rest_api_init', function () {
 	]);
 });
 
-# MATCHES
+# MATCHES - Update match status right after its creation
 add_action('rest_after_insert_matches', function ($post, $request, $creating) {
-	error_log('🔍 Disparou rest_after_insert_match para post ID: ' . $post->ID);
 	if (!$creating) return;
 
 	$post_id = $post->ID;
 	$related_offer = get_field('relatedOffer', $post_id);
 
 	if (!$related_offer) {
-		error_log("❌ relatedOffer não encontrado no match $post_id.");
 		return;
 	}
 
 	if (get_post_type($related_offer) !== 'classifieds') {
-		error_log("❌ Post #$related_offer não é classifieds.");
 		return;
 	}
 
 	update_field('status', 'pending', $related_offer);
-	error_log("✅ Post classifieds #$related_offer atualizado para 'pending' a partir do match #$post_id.");
 }, 10, 3);
 
 
-/*  --------- END CUSTOM ROUTES  --------- */
+# MATCH BY OFFER - Find match Idd for offer payment proof upload
+add_action('rest_api_init', function () {
+  register_rest_route('custom/v1', '/match-by-offer/(?P<offer_id>\d+)', [
+    'methods' => 'GET',
+    'callback' => 'get_match_by_offer',
+    'permission_callback' => function () {
+      return is_user_logged_in();
+    }
+  ]);
+});
 
-/*  --------- START CUSTOM FILTERS  --------- */
+function get_match_by_offer(WP_REST_Request $request) {
+  $offer_id = intval($request['offer_id']);
 
-# CLASSIFIEDS FILTERS
+  $matches = get_posts([
+    'post_type' => 'matches',
+    'posts_per_page' => 1,
+    'meta_query' => [
+      [
+        'key' => 'relatedOffer',
+        'value' => $offer_id,
+        'compare' => '='
+      ]
+    ]
+  ]);
+
+  if (empty($matches)) {
+    return new WP_Error('no_match', 'Nenhum match encontrado');
+  }
+
+  return [
+    'match_id' => $matches[0]->ID
+  ];
+}
+
+########################################################################
+##############  START CUSTOM FILTERS  ##################################
+########################################################################
+
+# CLASSIFIEDS FILTERS - Add Author and Status to the Classifieds filter
 add_action('restrict_manage_posts', function () {
 	global $typenow;
 
@@ -266,9 +301,9 @@ add_filter('rest_classifieds_query', function ($args, $request) {
 	return $args;
 }, 10, 2);
 
-/*  --------- END CUSTOM FILTERS  --------- */
-
-/*  --------- START CUSTOM API RESPONSE  --------- */
+########################################################################
+##############  START CUSTOM API RESPONSE  #############################
+########################################################################
 
 // return sellerTo and sellerFrom with bank name
 function kumbulink_prepare_response($response, $post, $request) {
@@ -310,9 +345,9 @@ function kumbulink_prepare_response($response, $post, $request) {
 
 	return $response;
 }
+
 add_filter('rest_prepare_classifieds', 'kumbulink_prepare_response' , 30, 3);
 add_filter('rest_prepare_matches', 'kumbulink_prepare_response' , 30, 3);
-
 
 add_filter('rest_prepare_matches', function ($response, $post, $request) {
 	$match_id = $post->ID;
@@ -345,7 +380,7 @@ add_filter('rest_prepare_matches', function ($response, $post, $request) {
 			}
 		}
 
-		// Inclui os dados como nested no match
+		// Includes the data as nested object into the offer object
 		$response->data['offer'] = [
 			'id' => $related_id,
 			'fields' => $related_fields
@@ -355,6 +390,98 @@ add_filter('rest_prepare_matches', function ($response, $post, $request) {
 	return $response;
 }, 10, 3);
 
+########################################################################
+#####################  START CUSTOM FIELDS #############################
+########################################################################
 
+/* Hide bank fields and display read-only information */
+add_action('admin_head', function () {
+	echo '<style>
+			.acf-field[data-name="buyerTo"] {
+					display: none;
+			}
+			.acf-field[data-name="sellerTo"] {
+				display: none;
+			}
+	</style>';
+});
 
+add_filter('acf/load_field/name=buyerBankDetails', function ($field) {
 
+	$post_id = get_the_ID();
+	$bank_id = get_field('buyerTo', $post_id);
+
+	if (!$bank_id) {
+			$field['message'] = '<em>Nenhum banco linkado</em>';
+			return $field;
+	}
+
+	$country        = get_field('country', $bank_id);
+	$recipient_name = get_field('recipient_name', $bank_id);
+	$bank           = get_field('bank', $bank_id);
+	$branch         = get_field('branch', $bank_id);
+	$account        = get_field('account_number', $bank_id);
+	$payment_key    = get_field('payment_key', $bank_id);
+
+	$rows = [];
+
+	$country        && $rows[] = "<strong>País:</strong> {$country}";
+	$recipient_name && $rows[] = "<strong>Recebedor:</strong> {$recipient_name}";
+	$bank           && $rows[] = "<strong>Banco:</strong> {$bank}";
+	$branch          && $rows[] = "<strong>Agencia:</strong> {$branch}";
+	$account         && $rows[] = "<strong>Conta:</strong> {$account}";
+	$payment_key    && $rows[] = "<strong>Chave de Pagamento:</strong> {$payment_key}";
+
+	$field['message'] = implode('<br>', $rows);
+
+	return $field;
+});
+
+add_filter('acf/load_field/name=sellerBankDetails', function ($field) {
+
+	$post_id = get_the_ID();
+	$bank_id = get_field('buyerTo', $post_id);
+
+	if (!$bank_id) {
+			$field['message'] = '<em>Nenhum banco linkado</em>';
+			return $field;
+	}
+
+	$country        = get_field('country', $bank_id);
+	$recipient_name = get_field('recipient_name', $bank_id);
+	$bank           = get_field('bank', $bank_id);
+	$branch         = get_field('branch', $bank_id);
+	$account        = get_field('account_number', $bank_id);
+	$payment_key    = get_field('payment_key', $bank_id);
+
+	$rows = [];
+
+	$country        && $rows[] = "<strong>País:</strong> {$country}";
+	$recipient_name && $rows[] = "<strong>Recebedor:</strong> {$recipient_name}";
+	$bank           && $rows[] = "<strong>Banco:</strong> {$bank}";
+	$branch          && $rows[] = "<strong>Agencia:</strong> {$branch}";
+	$account         && $rows[] = "<strong>Conta:</strong> {$account}";
+	$payment_key    && $rows[] = "<strong>Chave de Pagamento:</strong> {$payment_key}";
+
+	$field['message'] = implode('<br>', $rows);
+
+	return $field;
+});
+
+// Set read-only fields inside match posts
+add_filter('acf/load_field', function ($field) {
+	$readonly_fields = [
+			'buyer',
+			'relatedOffer',
+			'exchangeRate',
+			'tax',
+			'totalToBuyer',
+			'totalToSeller'
+	];
+
+	if (in_array($field['name'], $readonly_fields, true)) {
+			$field['disabled'] = 1;
+	}
+
+	return $field;
+});
