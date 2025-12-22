@@ -301,6 +301,7 @@ add_filter('rest_classifieds_query', function ($args, $request) {
 	return $args;
 }, 10, 2);
 
+
 ########################################################################
 ##############  START CUSTOM API RESPONSE  #############################
 ########################################################################
@@ -440,7 +441,7 @@ add_filter('acf/load_field/name=buyerBankDetails', function ($field) {
 add_filter('acf/load_field/name=sellerBankDetails', function ($field) {
 
 	$post_id = get_the_ID();
-	$bank_id = get_field('buyerTo', $post_id);
+	$bank_id = get_field('sellerTo', $post_id);
 
 	if (!$bank_id) {
 			$field['message'] = '<em>Nenhum banco linkado</em>';
@@ -485,3 +486,31 @@ add_filter('acf/load_field', function ($field) {
 
 	return $field;
 });
+
+
+// Add temporary url for payment proof view (/payment-proof/view)
+add_action('acf/render_field/name=sellerPaymentProof', 'render_payment_proof_admin_link');
+add_action('acf/render_field/name=buyerPaymentProof', 'render_payment_proof_admin_link');
+
+function render_payment_proof_admin_link($field) {
+	if (empty($field['value'])) {
+		return;
+	}
+
+	if (!current_user_can('manage_options')) {
+		return;
+	}
+
+	$type = $field['name'] === 'sellerPaymentProof' ? 'seller' : 'buyer';
+
+	$url = add_query_arg([
+		'post_id' => get_the_ID(),
+		'type'    => $type,
+	], rest_url('custom/v1/payment-proof/view'));
+
+	echo '<p style="margin-top:6px">';
+	echo '<a href="' . esc_url($url) . '" target="_blank" rel="noopener">';
+	echo '🔐 Ver comprovante';
+	echo '</a>';
+	echo '</p>';
+}
