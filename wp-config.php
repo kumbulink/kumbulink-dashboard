@@ -29,25 +29,28 @@ if (file_exists($env_path)) {
     }
 }
 
-// ** Database settings - You can get this info from your web host ** //
-/** The name of the database for WordPress */
-define( 'DB_NAME', getenv('DB_NAME') );
+if (file_exists(dirname(__FILE__) . '/wp-config-local.php')){
+	# IMPORTANT: ensure your local config does not include wp-settings.php
+	require_once(dirname(__FILE__) . '/wp-config-local.php');
+} else {
+    /** The name of the database for WordPress */
+    define( 'DB_NAME', getenv('DB_NAME') );
 
-/** Database username */
-define( 'DB_USER', getenv('DB_USER') );
+    /** Database username */
+    define( 'DB_USER', getenv('DB_USER') );
 
-/** Database password */
-define( 'DB_PASSWORD', getenv('DB_PASSWORD') );
+    /** Database password */
+    define( 'DB_PASSWORD', getenv('DB_PASSWORD') );
 
-/** Database hostname */
-define( 'DB_HOST', getenv('DB_HOST') );
+    /** Database hostname */
+    define( 'DB_HOST', getenv('DB_HOST') );
 
-/** Database charset to use in creating database tables. */
-define( 'DB_CHARSET', 'utf8' );
+    /** Database charset to use in creating database tables. */
+    define( 'DB_CHARSET', 'utf8' );
 
-/** The database collate type. Don't change this if in doubt. */
-define( 'DB_COLLATE', '' );
-
+    /** The database collate type. Don't change this if in doubt. */
+    define( 'DB_COLLATE', '' );
+}
 /**#@+
  * Authentication unique keys and salts.
  *
@@ -84,22 +87,6 @@ define('NONCE_SALT',       getenv('NONCE_SALT'));
  */
 $table_prefix = 'wp_';
 
-/**
- * For developers: WordPress debugging mode.
- *
- * Change this to true to enable the display of notices during development.
- * It is strongly recommended that plugin and theme developers use WP_DEBUG
- * in their development environments.
- *
- * For information on other constants that can be used for debugging,
- * visit the documentation.
- *
- * @link https://developer.wordpress.org/advanced-administration/debug/debug-wordpress/
- */
-define('WP_DEBUG', true);
-define('WP_DEBUG_LOG', true);
-define('WP_DEBUG_DISPLAY', false);
-@ini_set('display_errors', 0);
 /* Add any custom values between this line and the "stop editing" line. */
 
 define('JWT_AUTH_SECRET_KEY', getenv('JWT_AUTH_SECRET_KEY'));
