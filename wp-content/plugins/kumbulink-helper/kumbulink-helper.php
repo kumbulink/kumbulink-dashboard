@@ -6,6 +6,8 @@
  * Author: Kumbulink Dev Team
  */
 
+require_once __DIR__ . '/utils/cookie.php';
+
 // Redirects any frontend access to the dashboard
 add_action('template_redirect', function () {
 	if (!is_admin()) {
@@ -62,26 +64,14 @@ function set_jwt_cookie_http_only($data, $user) {
     $expiration = user_can($user->ID, 'administrator') 
         ? time() + (10 * 365 * 24 * 60 * 60)  // 10 years
         : time() + 3600;                       // 1 hour for normal users
-    
-    setcookie(
-        'jwt_token',
-        $token,
-        [
-            'expires' => $expiration,
-            'path' => '/',
-            'domain' => $_SERVER['HTTP_HOST'],
-            'secure' => true,            // only HTTPS
-            'httponly' => true,          // inacessible via JS
-            'samesite' => 'Strict'      // prevent CSRF cross-site
-        ]
-    );
+
+		kumbulink_set_jwt_cookie($token, $expiration);
     
     // If admin, keep the token in the response
     if (user_can($user->ID, 'administrator')) {
         $data['token'] = $token;
     } else {
-        // If not admin, remove the token from the response
-        // unset($data['token']);
+        unset($data['token']);
     }
     
     return $data;
