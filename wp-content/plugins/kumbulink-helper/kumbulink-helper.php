@@ -491,7 +491,7 @@ function render_payment_proof_admin_link($field) {
 		return;
 	}
 
-	$type = $field['name'] === 'sellerPaymentProof' ? 'seller' : 'buyer';
+	$type = $field['_name'] === 'sellerPaymentProof' ? 'seller' : 'buyer';
 
 	$url = add_query_arg([
 		'post_id' => get_the_ID(),
